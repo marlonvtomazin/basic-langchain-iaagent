@@ -57,7 +57,7 @@ py app.py
 ```
 
 ### 🗺️ Exemplo de funcionamento
-![Exemplo de chat](images/agentTest.jpg)
+![Exemplo de chat](images/agentTest.png)
 
 #  🛑 Observação Importante
 Este agente é uma demonstração de LLM e NÃO DEVE ser usado para substituir aconselhamento médico ou farmacêutico profissional. As informações fornecidas pelos modelos de IA podem não ser 100% precisas ou estar desatualizadas.
