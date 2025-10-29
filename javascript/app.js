@@ -1,139 +1,155 @@
 import { config } from 'dotenv';
-// Para carregar variáveis de ambiente do .env
-
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
-// O modelo Gemini (LLM)
-
-import {
-    ChatPromptTemplate,
-    MessagesPlaceholder,
-} from '@langchain/core/prompts'; // Componentes de Prompt
-
-import {
-    RunnableSequence,
-    RunnablePassthrough, // <--- CORRETO: Classes de encadeamento
-} from '@langchain/core/runnables'; // Componentes de Chain (Runnables)
-
-import {
-    AIMessage,
-    HumanMessage,
-    BaseMessage,
-} from '@langchain/core/messages'; // Classes de Mensagem
-
+import { TavilySearch } from "@langchain/tavily";
+import { StateGraph, END } from '@langchain/langgraph';
 import * as readline from 'readline/promises';
-// Para criar uma interface de linha de comando assíncrona
+
+// Configuração inicial
+config();
 
 // ----------------------------------------------------------------------
-// 0. Configuração Inicial
-// ----------------------------------------------------------------------
-config(); // Carrega as variáveis de ambiente (incluindo GEMINI_API_KEY)
-
-// ----------------------------------------------------------------------
-// 1. Definição do Template e Prompt
-// ----------------------------------------------------------------------
-
-const systemTemplate = `Você é um Assistente farmacêutico que ajuda os usuários a encontrar informações sobre medicamentos e suas dosagens.
-Forneça respostas claras e concisas com base nas informações disponíveis.`;
-
-const prompt = ChatPromptTemplate.fromMessages([
-    ['system', systemTemplate],
-    new MessagesPlaceholder('history'), // Onde o histórico de mensagens será injetado
-    ['human', '{input}'], // A nova entrada do usuário
-]);
-
-
-// ----------------------------------------------------------------------
-// 2. Configuração do Modelo
+// 1. Configuração do Modelo e Ferramentas
 // ----------------------------------------------------------------------
 const llm = new ChatGoogleGenerativeAI({
     model: 'gemini-2.5-flash',
-    temperature: 0.2, // Prioriza respostas factuais
+    temperature: 0.2,
 });
 
+const searchTool = new TavilySearch({ maxResults: 3 });
+const tools = [searchTool];
+
 // ----------------------------------------------------------------------
-// 3. Gerenciamento de Histórico (Memória)
+// 2. Definição do Estado do Agente
 // ----------------------------------------------------------------------
+const graphState = {
+    messages: {
+        value: (x, y) => x.concat(y),
+        default: () => []
+    },
+    next: { value: null }
+};
 
-// No LangChain JS, a abordagem mais comum para memória é gerenciar o array
-// de mensagens manualmente em memória (ou usando um ChatMessageHistory específico).
+// ----------------------------------------------------------------------
+// 3. Nó do Agente Principal
+// ----------------------------------------------------------------------
+async function agentNode(state) {
+    const lastMessage = state.messages[state.messages.length - 1];
+    
+    // Prepara o prompt com histórico
+    const messages = [
+        {
+            role: "system",
+            content: `Você é um Assistente farmacêutico especializado em medicamentos e dosagens.
+            Use a ferramenta de busca quando precisar de informações atualizadas.
+            Seja claro e conciso nas respostas.`
+        },
+        ...state.messages
+    ];
 
-/** @type {BaseMessage[]} */
-let messageHistory = [];
-
-/**
- * Função para obter o histórico atual (como no get_history do Python)
- * @returns {BaseMessage[]} O array de mensagens.
- */
-function getHistory() {
-    return messageHistory;
+    // Chama o LLM com ferramentas
+    const response = await llm.invoke(messages, { tools });
+    
+    return {
+        messages: [response],
+        next: response.tool_calls?.length > 0 ? "tools" : "end"
+    };
 }
 
-/**
- * Função para atualizar o histórico após uma rodada
- * @param {string} input - A mensagem do usuário
- * @param {string} output - A resposta do assistente
- */
-function updateHistory(input, output) {
-    messageHistory.push(new HumanMessage(input));
-    messageHistory.push(new AIMessage(output));
+// ----------------------------------------------------------------------
+// 4. Nó de Ferramentas
+// ----------------------------------------------------------------------
+async function toolsNode(state) {
+    const lastMessage = state.messages[state.messages.length - 1];
+    const toolCalls = lastMessage.tool_calls;
+    
+    const results = [];
+    for (const toolCall of toolCalls) {
+        const tool = tools.find(t => t.name === toolCall.name);
+        if (tool) {
+            const result = await tool.invoke(toolCall.args);
+            results.push({
+                ...toolCall,
+                result
+            });
+        }
+    }
+
+    // Prepara mensagem com resultados
+    const messages = [
+        {
+            role: "tool",
+            content: JSON.stringify(results),
+            tool_call_id: toolCalls[0].id
+        }
+    ];
+
+    return {
+        messages,
+        next: "agent"
+    };
 }
 
 // ----------------------------------------------------------------------
-// 4. Criação da Chain (Simulando RunnableWithMessageHistory)
+// 5. Construção do Graph
 // ----------------------------------------------------------------------
+const workflow = new StateGraph({ channels: graphState })
+    .addNode("agent", agentNode)
+    .addNode("tools", toolsNode)
+    .addEdge("tools", "agent")
+    .addConditionalEdges(
+        "agent",
+        (state) => state.next
+    )
+    .setEntryPoint("agent");
 
-const chain = RunnableSequence.from([
-    // 1. Injeta o histórico no objeto de entrada
-    RunnablePassthrough.assign({
-        history: () => getHistory(), 
-    }),
-    // 2. Aplica o Prompt com o histórico e o novo input
-    prompt,
-    // 3. Passa para o LLM
-    llm,
-]);
-
+const app = workflow.compile();
 
 // ----------------------------------------------------------------------
-// 5. Loop de Execução e Interação com o Usuário
+// 6. Interface com o Usuário
 // ----------------------------------------------------------------------
-
-async function iniciarAssistenteFarmaceutico() {
-    console.log('Assistente Farmacêutico Iniciado (Node.js). Digite "sair" ou "exit" para encerrar.');
+async function iniciarAssistente() {
+    console.log('💊 Assistente Farmacêutico Iniciado');
+    console.log('Digite "sair" para encerrar\n');
 
     const rl = readline.createInterface({
         input: process.stdin,
         output: process.stdout,
     });
 
-    while (true) {
-        const userInput = await rl.question('Você: ');
+    let chatHistory = [];
 
-        if (userInput.toLowerCase() === 'sair' || userInput.toLowerCase() === 'exit') {
-            console.log('Encerrando o Assistente Farmacêutico. Até logo!');
+    while (true) {
+        const userInput = await rl.question('👤 Você: ');
+
+        if (userInput.toLowerCase() === 'sair') {
+            console.log('👋 Até logo!');
             rl.close();
             break;
         }
 
         try {
-            // Invoca a chain, passando o input do usuário
-            const resposta = await chain.invoke({
-                input: userInput
+            // Adiciona mensagem do usuário ao histórico
+            chatHistory.push({ role: "human", content: userInput });
+
+            // Executa o graph
+            const result = await app.invoke({
+                messages: chatHistory
             });
 
-            const respostaContent = resposta.content;
-            console.log(`Assistente: ${respostaContent}`);
+            // Obtém a resposta final (última mensagem do assistente)
+            const finalMessages = result.messages;
+            const assistantResponse = finalMessages[finalMessages.length - 1].content;
             
-            // Atualiza o histórico para a próxima rodada
-            updateHistory(userInput, respostaContent);
+            console.log(`💊 Assistente: ${assistantResponse}`);
+
+            // Atualiza histórico
+            chatHistory = finalMessages;
 
         } catch (error) {
-            console.error('\n--- Erro ao chamar o LLM ---');
-            console.error('Detalhes:', error);
-            // Continua o loop
+            console.error('❌ Erro:', error.message);
         }
     }
 }
 
-// Executa a função principal
-iniciarAssistenteFarmaceutico();
+// Executa o assistente
+iniciarAssistente();
