@@ -1,4 +1,4 @@
-# 💊 Assistente Farmacêutico (LangChain + Gemini)
+# 💊 Assistente Farmacêutico (LangChain + Gemini) - Work in progress
 
 Um projeto de chatbot construído com o framework LangChain, utilizando o modelo de linguagem grande (LLM) Gemini 2.5 Flash do Google para fornecer informações claras e concisas sobre medicamentos e dosagens. O agente mantém o histórico de conversas utilizando a memória de sessão do LangChain.
 
@@ -57,7 +57,7 @@ py app.py
 ```
 
 ### 🗺️ Exemplo de funcionamento
-![Exemplo de chat](images/agentTest.png)
+![Exemplo de chat](images/agentTest.jpg)
 
 #  🛑 Observação Importante
 Este agente é uma demonstração de LLM e NÃO DEVE ser usado para substituir aconselhamento médico ou farmacêutico profissional. As informações fornecidas pelos modelos de IA podem não ser 100% precisas ou estar desatualizadas.
