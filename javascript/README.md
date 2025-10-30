@@ -48,18 +48,18 @@ npm install
 
 ### Para rodar o LLM do Google, você precisa de uma chave de API:
 * Obtenha a Chave: Crie sua chave API gratuitamente no Google Cloud console: https://console.cloud.google.com.
-2. Faça Login
+1. Faça Login
 * Use sua conta Google
 * Se não tiver conta, crie uma (é gratuito)
-3. Crie um Projeto
+2. Crie um Projeto
 * Clique no seletor de projetos no topo
 * "New Project"
 * Nomeie como "Assistente-Farmaceutico"
-4. Ative a API do Gemini
+3. Ative a API do Gemini
 * Vá em "APIs & Services" > "Library"
 * Pesquise por "Generative Language API"
 * Clique em "Enable"
-5. Crie as Credenciais
+4. Crie as Credenciais
 * Vá em "APIs & Services" > "Credentials"
 * Clique em "Create Credentials" > "API Key"
 * Copie a chave gerada
