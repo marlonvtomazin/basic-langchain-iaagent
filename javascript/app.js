@@ -90,17 +90,17 @@ async function toolsNode(state) {
 }
 
 // ----------------------------------------------------------------------
-// 5. Construção do Graph
+// 5. Construção do Graph (CORRIGIDO)
 // ----------------------------------------------------------------------
 const workflow = new StateGraph({ channels: graphState })
     .addNode("agent", agentNode)
     .addNode("tools", toolsNode)
     .addEdge("tools", "agent")
+    .addEdge("__start__", "agent") // Ponto de entrada correto
     .addConditionalEdges(
         "agent",
         (state) => state.next
-    )
-    .setEntryPoint("agent");
+    );
 
 const app = workflow.compile();
 
