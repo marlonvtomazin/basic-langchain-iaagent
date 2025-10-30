@@ -1,5 +1,5 @@
-# 💊 Assistente Farmacêutico (LangChain + Gemini) -> Javascript
-# 💊 Assistente Farmacêutico (LangGraph + Gemini) - Python
+# 💊 Assistente Farmacêutico (LangChain + Gemini) -> Python
+# 💊 Assistente Farmacêutico (LangGraph + Gemini + Tavily) - Javascript
 
 
 
